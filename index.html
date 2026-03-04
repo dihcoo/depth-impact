@@ -181,7 +181,7 @@
     .contour-row { margin-bottom: 12px; }
 
     .progress-wrap {
-        display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+        display: flex; align-items: center; gap: 8px; margin-bottom: 18px; margin-top: 4px;
     }
     .progress-wrap input[type=range] { flex:1; height:18px; accent-color:var(--neon); cursor:pointer; }
     .time-label { font-size:8px; letter-spacing:1px; color:var(--neon); min-width:30px; text-align:right; opacity:.65; }
@@ -347,64 +347,85 @@ for (let a=0; a<NODES.length; a++) {
     }
 }
 
-// ── Orbital stars — each on its own inclined elliptical path ─────────────────
-// orbitR : semi-major axis as fraction of sphere radius
-// incl   : orbital plane tilt (radians) — gives 3D celestial feel
-// phase  : starting angle on orbit
-// speed  : orbital angular velocity (radians/sec) — slower for outer orbits (Kepler-like)
-// size   : base dot radius
-// twinkle: amplitude of brightness oscillation
-const STARS = Array.from({length:55}, (_, i) => {
-    const orbitR  = 0.18 + Math.random() * 0.72;          // inner to outer
-    const speed   = (0.04 + Math.random() * 0.18) * (Math.random()<0.5?1:-1) / Math.sqrt(orbitR); // Kepler: slower further out
-    const incl    = (Math.random() - 0.5) * Math.PI;      // -90° to +90° tilt
-    const ascNode = Math.random() * Math.PI * 2;           // longitude of ascending node
-    const ecc     = Math.random() * 0.45;                  // eccentricity 0–0.45
+// ── Celestial orbital star system ────────────────────────────────────────────
+// Each star belongs to a frequency band matching the 3 slider zones:
+//   band='lo'  → LO CONTOUR (bass)    — equatorial orbits, teal-green
+//   band='mid' → DEPTH (spatial/mid)  — inclined orbits,   cyan
+//   band='hi'  → CLARITY (treble)     — polar orbits,      cold blue-white
+//
+// Full Keplerian mechanics:
+//   • Elliptical orbits (eccentricity 0–0.42)
+//   • Orbital precession: ascending node drifts slowly over time
+//   • Axial wobble: inclination oscillates gently (like a spinning top)
+//   • Kepler's 3rd law: outer stars orbit slower
+//   • ~30% retrograde
+//   • Trail rendering: ghost positions drawn behind each star
+const STAR_BANDS = [
+    ...Array(18).fill('lo'),
+    ...Array(16).fill('mid'),
+    ...Array(18).fill('hi')
+];
+
+const STARS = STAR_BANDS.map((band) => {
+    const orbitR  = 0.13 + Math.random() * 0.68;
+    const dir     = Math.random() < 0.3 ? -1 : 1;
+    // Kepler 3rd law: T ∝ a^1.5, so ω ∝ a^-1.5 → speed ∝ 1/sqrt(a)
+    const speed   = dir * (0.055 + Math.random() * 0.20) / Math.sqrt(orbitR);
+    // Band-specific inclination ranges
+    const inclBase  = band==='lo'  ? (Math.random()-0.5)*0.55          // near equator
+                    : band==='hi'  ? Math.PI*0.5 + (Math.random()-0.5)*0.7  // near poles
+                    :                (Math.random()-0.5)*Math.PI;      // full range
+    const ascNode0  = Math.random() * Math.PI * 2;
+    // Precession rate: slow drift of orbital plane
+    const precRate  = (Math.random()-0.5) * 0.012;
+    // Axial wobble: inclination oscillates sinusoidally
+    const wobbleAmp = 0.02 + Math.random() * 0.08;
+    const wobbleSpd = 0.008 + Math.random() * 0.025;
+    const wobblePhs = Math.random() * Math.PI * 2;
+    const ecc       = Math.random() * 0.42;
+    const fi        = band==='lo'  ? Math.floor(Math.random()*5)
+                    : band==='hi'  ? 19+Math.floor(Math.random()*35)
+                    :                 5+Math.floor(Math.random()*14);
     return {
-        orbitR,
-        speed,
-        incl,
-        ascNode,
+        band, fi,
+        hue: band,          // color = band identity
+        orbitR, speed, inclBase, ascNode0, precRate,
+        wobbleAmp, wobbleSpd, wobblePhs,
         ecc,
-        phase : Math.random() * Math.PI * 2,
-        size  : 0.12 + Math.random() * 0.55 * (1 - orbitR * 0.4), // inner = bigger
-        basOp : 0.15 + Math.random() * 0.55,
-        twinkleSpeed: 0.4 + Math.random() * 2.2,
-        twinkleAmp  : 0.1 + Math.random() * 0.35,
+        phase       : Math.random() * Math.PI * 2,
+        size        : 0.10 + Math.random() * 0.48 * (1 - orbitR * 0.3),
+        basOp       : 0.20 + Math.random() * 0.50,
+        twinkleSpeed: 0.5  + Math.random() * 2.5,
+        twinkleAmp  : 0.08 + Math.random() * 0.28,
         twinklePhase: Math.random() * Math.PI * 2,
-        // color: mostly white, some warm, some cool
-        hue: Math.random() < 0.2 ? (Math.random()<0.5?'warm':'cool') : 'white'
+        trailLen    : 3 + Math.floor(Math.random() * 5),   // ghost steps
+        trailDt     : 0.18 + Math.random() * 0.25,         // time gap per ghost
     };
 });
 
-function getStarPos(s, t) {
-    // True anomaly via eccentric anomaly (simple approximation for low ecc)
-    const M = s.phase + s.speed * t;        // mean anomaly
-    const E = M + s.ecc * Math.sin(M);      // eccentric anomaly (1st order)
+function getStarPos(s, t, timeOffset) {
+    const tEval = t - (timeOffset || 0);
+    // Live precessing orbital elements
+    const ascNode = s.ascNode0 + s.precRate * tEval;
+    const incl    = s.inclBase + s.wobbleAmp * Math.sin(s.wobbleSpd * tEval + s.wobblePhs);
+    // Keplerian position
+    const M = s.phase + s.speed * tEval;
+    const E = M + s.ecc * Math.sin(M);   // eccentric anomaly (1st order)
     const trueA = 2 * Math.atan2(
-        Math.sqrt(1+s.ecc)*Math.sin(E/2),
-        Math.sqrt(1-s.ecc)*Math.cos(E/2)
+        Math.sqrt(1 + s.ecc) * Math.sin(E / 2),
+        Math.sqrt(1 - s.ecc) * Math.cos(E / 2)
     );
-    const r = s.orbitR * R * (1 - s.ecc*s.ecc) / (1 + s.ecc*Math.cos(trueA));
-
-    // Position in orbital plane
+    const rRaw = s.orbitR * R * (1 - s.ecc * s.ecc) / (1 + s.ecc * Math.cos(trueA));
+    const r    = Math.min(rRaw, R * 0.87);
     const xOrb = r * Math.cos(trueA);
     const yOrb = r * Math.sin(trueA);
-
-    // Rotate by inclination and ascending node to get 3D coords
-    const cosI = Math.cos(s.incl), sinI = Math.sin(s.incl);
-    const cosN = Math.cos(s.ascNode), sinN = Math.sin(s.ascNode);
-
-    const x3 =  cosN*xOrb - sinN*yOrb*cosI;
-    const y3 =  sinN*xOrb + cosN*yOrb*cosI;
-    const z3 =                   yOrb*sinI;
-
-    // Orthographic project onto canvas (Y-axis up)
-    return {
-        sx: CX + x3,
-        sy: CY - y3,
-        depth: z3 / R      // -1 back, +1 front
-    };
+    // Rotate orbital plane by inclination + ascending node
+    const cosI = Math.cos(incl), sinI = Math.sin(incl);
+    const cosN = Math.cos(ascNode), sinN = Math.sin(ascNode);
+    const x3 =  cosN * xOrb - sinN * yOrb * cosI;
+    const y3 =  sinN * xOrb + cosN * yOrb * cosI;
+    const z3 =                       yOrb * sinI;
+    return { sx: CX + x3, sy: CY - y3, depth: z3 / R };
 }
 
 // ── 3D projection ─────────────────────────────────────────────────────────────
@@ -464,8 +485,15 @@ function buildAudioGraph() {
 }
 
 function floatTo16(buf){
-    const out=new Int16Array(buf.length);
-    for(let i=0;i<buf.length;i++){const s=Math.max(-1,Math.min(1,buf[i]));out[i]=s<0?s*0x8000:s*0x7FFF;}
+    // -0.1 dBFS ceiling: linear peak limit of 0.9886 prevents MP3 encoder clipping.
+    // MP3 encoding can introduce inter-sample peaks above 0 dBFS even when the
+    // PCM is at 0 dBFS, so we pull the ceiling down by 0.1 dB as headroom.
+    const CEILING = 0.9886;   // 10^(-0.1/20) = 0.9886
+    const out = new Int16Array(buf.length);
+    for (let i = 0; i < buf.length; i++) {
+        const s = Math.max(-CEILING, Math.min(CEILING, buf[i]));
+        out[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
     return out;
 }
 
@@ -584,60 +612,89 @@ function draw(){
     ctx.save();
     ctx.beginPath(); ctx.arc(CX,CY,R-0.5,0,Math.PI*2); ctx.clip();
 
-    // ── Orbital stars ──
+    // ── Celestial stars — precessing Keplerian orbits with trails ──
     const t = Date.now() / 1000;
     STARS.forEach(s => {
-        const pos = getStarPos(s, t);
+        const rawFreq    = freq[Math.min(s.fi, bins-1)] / 255;
+        const sliderBoost = s.band==='lo' ? contourVal*0.6
+                          : s.band==='hi' ? clarityVal*0.6
+                          :                 depthVal*0.4;
+        const energy = Math.min(1, rawFreq + sliderBoost);
 
-        // Depth cue: stars behind sphere centre are dimmer and smaller
-        const depthAlpha = 0.3 + 0.7 * ((pos.depth + 1) / 2);  // 0.3 (back) → 1.0 (front)
-        const depthScale = 0.55 + 0.45 * ((pos.depth + 1) / 2);
+        // Band colors
+        let cr,cg,cb;
+        if      (s.hue==='lo')  { cr=0;   cg=210; cb=140; }
+        else if (s.hue==='hi')  { cr=170; cg=235; cb=255; }
+        else                    { cr=0;   cg=255; cb=215; }
+        const bloom = energy * 0.68;
+        const r = Math.round(cr+(255-cr)*bloom);
+        const g = Math.round(cg+(255-cg)*bloom*0.45);
+        const b = Math.round(cb+(255-cb)*bloom*0.25);
 
-        // Twinkle
-        const twinkle = 1 + s.twinkleAmp * Math.sin(t * s.twinkleSpeed + s.twinklePhase);
-        const alpha   = Math.min(1, s.basOp * depthAlpha * twinkle);
-        const radius  = s.size * depthScale * twinkle;
-
-        // Color
-        let r=255,g=255,b=255;
-        if (s.hue==='warm') { r=255; g=230; b=190; }    // warm yellow-white
-        if (s.hue==='cool') { r=180; g=230; b=255; }    // cool blue-white
-
-        // Tiny glow halo for brighter stars
-        if (alpha > 0.35 && radius > 0.3) {
-            const glow = ctx.createRadialGradient(pos.sx,pos.sy,0,pos.sx,pos.sy,radius*3.5);
-            glow.addColorStop(0,   `rgba(${r},${g},${b},${alpha*0.45})`);
-            glow.addColorStop(1,   `rgba(${r},${g},${b},0)`);
-            ctx.beginPath(); ctx.arc(pos.sx,pos.sy,radius*3.5,0,Math.PI*2);
-            ctx.fillStyle=glow; ctx.fill();
+        // ── Trail: draw ghost positions behind the star ──
+        for (let step = s.trailLen; step >= 1; step--) {
+            const tOff  = step * s.trailDt;
+            const ghost = getStarPos(s, t, tOff);
+            if (ghost.depth < -0.05) continue;
+            const ghostDepth = 0.28 + 0.72 * ((ghost.depth+1)/2);
+            const fade  = (1 - step / (s.trailLen + 1));   // 0=oldest, 1=newest
+            const tAlpha= fade * 0.18 * ghostDepth * (0.4 + energy*0.5);
+            const tRad  = Math.max(0.1, s.size * 0.55 * fade * ghostDepth);
+            ctx.beginPath(); ctx.arc(ghost.sx, ghost.sy, tRad, 0, Math.PI*2);
+            ctx.fillStyle = `rgba(${cr},${cg},${cb},${tAlpha})`;
+            ctx.fill();
         }
 
-        // Core point
-        ctx.beginPath(); ctx.arc(pos.sx,pos.sy,Math.max(0.15,radius),0,Math.PI*2);
-        ctx.fillStyle=`rgba(${r},${g},${b},${alpha})`;
+        // ── Core star ──
+        const pos        = getStarPos(s, t);
+        if (pos.depth < -0.08) return;
+        const depthAlpha = 0.28 + 0.72 * ((pos.depth+1)/2);
+        const depthScale = 0.50 + 0.50 * ((pos.depth+1)/2);
+        const twinkle    = 1 + (s.twinkleAmp + energy*0.22) * Math.sin(t*s.twinkleSpeed + s.twinklePhase);
+        const alpha      = Math.min(1, (s.basOp + energy*0.45) * depthAlpha * twinkle);
+        const radius     = (s.size + energy*1.1) * depthScale;
+
+        // Glow halo
+        const haloR = Math.max(radius*2.5, radius*2.5 + energy*4.5);
+        if (alpha > 0.08) {
+            const glow = ctx.createRadialGradient(pos.sx,pos.sy,0,pos.sx,pos.sy,haloR);
+            glow.addColorStop(0,   `rgba(${r},${g},${b},${alpha*(0.28+energy*0.38)})`);
+            glow.addColorStop(0.5, `rgba(${cr},${cg},${cb},${alpha*0.05})`);
+            glow.addColorStop(1,   'rgba(0,0,0,0)');
+            ctx.beginPath(); ctx.arc(pos.sx,pos.sy,haloR,0,Math.PI*2);
+            ctx.fillStyle=glow; ctx.fill();
+        }
+        ctx.beginPath(); ctx.arc(pos.sx,pos.sy,Math.max(0.18,radius),0,Math.PI*2);
+        ctx.fillStyle=`rgba(${r},${g},${b},${Math.min(1,alpha)})`;
         ctx.fill();
     });
 
     const rotY=(Date.now()/1000)*0.16;
     const P=NODES.map(n=>proj(n.lat,n.lon,rotY));
 
-    // ── Edges ──
-    EDGES.forEach(([a,b])=>{
+    // ── Edges — depth-sorted back→front, strict back-face culling ──
+    // Pre-compute edge midpoint depth, sort so back edges draw first (painter's algo)
+    const edgeSorted = EDGES.map(([a,b]) => {
         const pa=P[a],pb=P[b];
-        if(pa.z<-0.05&&pb.z<-0.05) return;
+        return { a, b, pa, pb, midZ:(pa.z+pb.z)/2 };
+    }).sort((x,y)=>x.midZ-y.midZ); // back first
+
+    edgeSorted.forEach(({a,b,pa,pb,midZ})=>{
+        // Cull any edge where BOTH endpoints are behind the hemisphere
+        if(pa.z < 0.0 && pb.z < 0.0) return;
+        // Smoothly fade edges near the limb (z≈0) — prevents harsh crossing lines
+        const vis = Math.min(1, Math.max(0, midZ + 0.18) * 3.5);
+        if(vis <= 0) return;
         const na=NODES[a],nb=NODES[b];
         const va=freq[Math.min(na.fi,bins-1)]/255;
         const vb=freq[Math.min(nb.fi,bins-1)]/255;
         const e=(va+vb)/2;
-        const vis=Math.max(0,(pa.z+pb.z)/2+0.25);
-        // Per-band edge color
         const type=na.type;
-        // lo=warm teal, mid=cyan, hi=cool white-cyan
         const [r,g,b2]= type==='lo'?[0,200,155]: type==='hi'?[160,245,255]:[0,255,215];
-        const alpha=Math.min(0.6, 0.06+e*0.4+vis*0.08);
+        const alpha=Math.min(0.55, (0.04+e*0.38)*vis);
         ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y);
         ctx.strokeStyle=`rgba(${r},${g},${b2},${alpha})`;
-        ctx.lineWidth=0.45+e*0.9;
+        ctx.lineWidth=0.4+e*0.85;
         ctx.stroke();
     });
 
