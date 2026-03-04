@@ -347,11 +347,65 @@ for (let a=0; a<NODES.length; a++) {
     }
 }
 
-// Background stars inside sphere
-const STARS=Array.from({length:60},()=>({
-    x:Math.random()*SIZE, y:Math.random()*SIZE,
-    r:0.1+Math.random()*0.35, op:0.03+Math.random()*0.1, dy:0.012+Math.random()*0.025
-}));
+// ── Orbital stars — each on its own inclined elliptical path ─────────────────
+// orbitR : semi-major axis as fraction of sphere radius
+// incl   : orbital plane tilt (radians) — gives 3D celestial feel
+// phase  : starting angle on orbit
+// speed  : orbital angular velocity (radians/sec) — slower for outer orbits (Kepler-like)
+// size   : base dot radius
+// twinkle: amplitude of brightness oscillation
+const STARS = Array.from({length:55}, (_, i) => {
+    const orbitR  = 0.18 + Math.random() * 0.72;          // inner to outer
+    const speed   = (0.04 + Math.random() * 0.18) * (Math.random()<0.5?1:-1) / Math.sqrt(orbitR); // Kepler: slower further out
+    const incl    = (Math.random() - 0.5) * Math.PI;      // -90° to +90° tilt
+    const ascNode = Math.random() * Math.PI * 2;           // longitude of ascending node
+    const ecc     = Math.random() * 0.45;                  // eccentricity 0–0.45
+    return {
+        orbitR,
+        speed,
+        incl,
+        ascNode,
+        ecc,
+        phase : Math.random() * Math.PI * 2,
+        size  : 0.12 + Math.random() * 0.55 * (1 - orbitR * 0.4), // inner = bigger
+        basOp : 0.15 + Math.random() * 0.55,
+        twinkleSpeed: 0.4 + Math.random() * 2.2,
+        twinkleAmp  : 0.1 + Math.random() * 0.35,
+        twinklePhase: Math.random() * Math.PI * 2,
+        // color: mostly white, some warm, some cool
+        hue: Math.random() < 0.2 ? (Math.random()<0.5?'warm':'cool') : 'white'
+    };
+});
+
+function getStarPos(s, t) {
+    // True anomaly via eccentric anomaly (simple approximation for low ecc)
+    const M = s.phase + s.speed * t;        // mean anomaly
+    const E = M + s.ecc * Math.sin(M);      // eccentric anomaly (1st order)
+    const trueA = 2 * Math.atan2(
+        Math.sqrt(1+s.ecc)*Math.sin(E/2),
+        Math.sqrt(1-s.ecc)*Math.cos(E/2)
+    );
+    const r = s.orbitR * R * (1 - s.ecc*s.ecc) / (1 + s.ecc*Math.cos(trueA));
+
+    // Position in orbital plane
+    const xOrb = r * Math.cos(trueA);
+    const yOrb = r * Math.sin(trueA);
+
+    // Rotate by inclination and ascending node to get 3D coords
+    const cosI = Math.cos(s.incl), sinI = Math.sin(s.incl);
+    const cosN = Math.cos(s.ascNode), sinN = Math.sin(s.ascNode);
+
+    const x3 =  cosN*xOrb - sinN*yOrb*cosI;
+    const y3 =  sinN*xOrb + cosN*yOrb*cosI;
+    const z3 =                   yOrb*sinI;
+
+    // Orthographic project onto canvas (Y-axis up)
+    return {
+        sx: CX + x3,
+        sy: CY - y3,
+        depth: z3 / R      // -1 back, +1 front
+    };
+}
 
 // ── 3D projection ─────────────────────────────────────────────────────────────
 function proj(lat, lon, rotY) {
@@ -530,11 +584,38 @@ function draw(){
     ctx.save();
     ctx.beginPath(); ctx.arc(CX,CY,R-0.5,0,Math.PI*2); ctx.clip();
 
-    // Drifting background stars
-    STARS.forEach(s=>{
-        ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
-        ctx.fillStyle=`rgba(160,255,230,${s.op})`; ctx.fill();
-        s.y+=s.dy; if(s.y>SIZE){s.y=0;s.x=Math.random()*SIZE;}
+    // ── Orbital stars ──
+    const t = Date.now() / 1000;
+    STARS.forEach(s => {
+        const pos = getStarPos(s, t);
+
+        // Depth cue: stars behind sphere centre are dimmer and smaller
+        const depthAlpha = 0.3 + 0.7 * ((pos.depth + 1) / 2);  // 0.3 (back) → 1.0 (front)
+        const depthScale = 0.55 + 0.45 * ((pos.depth + 1) / 2);
+
+        // Twinkle
+        const twinkle = 1 + s.twinkleAmp * Math.sin(t * s.twinkleSpeed + s.twinklePhase);
+        const alpha   = Math.min(1, s.basOp * depthAlpha * twinkle);
+        const radius  = s.size * depthScale * twinkle;
+
+        // Color
+        let r=255,g=255,b=255;
+        if (s.hue==='warm') { r=255; g=230; b=190; }    // warm yellow-white
+        if (s.hue==='cool') { r=180; g=230; b=255; }    // cool blue-white
+
+        // Tiny glow halo for brighter stars
+        if (alpha > 0.35 && radius > 0.3) {
+            const glow = ctx.createRadialGradient(pos.sx,pos.sy,0,pos.sx,pos.sy,radius*3.5);
+            glow.addColorStop(0,   `rgba(${r},${g},${b},${alpha*0.45})`);
+            glow.addColorStop(1,   `rgba(${r},${g},${b},0)`);
+            ctx.beginPath(); ctx.arc(pos.sx,pos.sy,radius*3.5,0,Math.PI*2);
+            ctx.fillStyle=glow; ctx.fill();
+        }
+
+        // Core point
+        ctx.beginPath(); ctx.arc(pos.sx,pos.sy,Math.max(0.15,radius),0,Math.PI*2);
+        ctx.fillStyle=`rgba(${r},${g},${b},${alpha})`;
+        ctx.fill();
     });
 
     const rotY=(Date.now()/1000)*0.16;
