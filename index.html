@@ -25,6 +25,8 @@
         overflow: hidden;
         display: flex;
         justify-content: center;
+        overscroll-behavior: none;
+        touch-action: pan-x pan-y;
     }
 
     .app-container {
@@ -94,7 +96,7 @@
         top: -5px; left: -5px; right: -5px; bottom: -5px;
     }
 
-    canvas { display: block; border-radius: 50%; }
+    canvas { display: block; border-radius: 50%; touch-action: none; user-select: none; -webkit-user-select: none; }
 
     .control-panel {
         background: #080808;
@@ -385,10 +387,15 @@ function buildAudioGraph() {
         analyser.connect(audioCtx.destination);
 
         // ScriptProcessor for PCM capture → lamejs MP3
+        // Route through a SILENT gain (gain=0) so ScriptProcessor can read PCM
+        // without adding a second copy of the audio to the output (which caused saturation).
         try {
             scriptProc = audioCtx.createScriptProcessor(4096, 2, 2);
+            const silentSink = audioCtx.createGain();
+            silentSink.gain.value = 0;
             masterGain.connect(scriptProc);
-            scriptProc.connect(audioCtx.destination);
+            scriptProc.connect(silentSink);
+            silentSink.connect(audioCtx.destination); // Web Audio requires a destination connection
             scriptProc.onaudioprocess = function(e) {
                 if (!isRecording || !lameMp3Enc) return;
                 const L = floatTo16(e.inputBuffer.getChannelData(0));
@@ -611,6 +618,16 @@ function draw(){
 }
 
 draw();
+
+// ── Anti-jog: prevent touchmove on the sphere from scrolling the page ─────────
+canvas.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
+canvas.addEventListener('touchstart', function(e) { e.preventDefault(); }, { passive: false });
+// Also lock the whole app container so incidental swipes don't scroll
+document.querySelector('.app-container').addEventListener('touchmove', function(e) {
+    // Allow vertical scroll on sliders/buttons but block any rubber-band / page scroll
+    e.stopPropagation();
+}, { passive: true });
+document.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
 </script>
 
 </body>
