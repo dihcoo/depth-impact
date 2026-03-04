@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DepthImpact Hybrid</title>
+    <style>
+        :root {
+            --neon: #00ffcc;
+            --neon-dim: rgba(0,255,204,0.25);
+            --bg: #060608;
+            --panel: #0d0d10;
+            --red: #ff0033;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+
+```
+    body {
+        background: var(--bg);
+        color: #fff;
+        font-family: -apple-system, 'SF Pro Display', BlinkMacSystemFont, sans-serif;
+        height: 100dvh;
+        width: 100vw;
+        overflow: hidden;
+        display: flex;
+        justify-content: center;
+    }
+
+    .app-container {
+        background: var(--panel);
+        width: 100%;
+        max-width: 480px;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .top-header {
+        padding: 12px 12px 9px;
+        background: #000;
+        border-bottom: 1.5px solid var(--neon);
+        text-align: center;
+        flex-shrink: 0;
+    }
+    .top-header h1 {
+        font-size: 0.95rem;
+        letter-spacing: 6px;
+        text-transform: uppercase;
+        font-weight: 800;
+    }
+    .top-header h1 span { color: var(--neon); }
+
+    .main-interface {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 6px 8px;
+        min-height: 0;
+    }
+
+    .sphere-label {
+        font-size: 8px;
+        letter-spacing: 4px;
+        color: var(--neon);
+        text-transform: uppercase;
+        opacity: 0.65;
+        margin-bottom: 8px;
+    }
+
+    .globe-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .globe-ring-outer {
+        position: absolute;
+        border-radius: 50%;
+        border: 1px solid rgba(0,255,204,0.12);
+        box-shadow: 0 0 35px rgba(0,255,204,0.07), inset 0 0 35px rgba(0,255,204,0.03);
+        pointer-events: none;
+        top: -14px; left: -14px; right: -14px; bottom: -14px;
+    }
+    .globe-ring-inner {
+        position: absolute;
+        border-radius: 50%;
+        border: 1.5px solid rgba(0,255,204,0.32);
+        box-shadow: 0 0 20px rgba(0,255,204,0.18), inset 0 0 20px rgba(0,255,204,0.05);
+        pointer-events: none;
+        top: -5px; left: -5px; right: -5px; bottom: -5px;
+    }
+
+    canvas { display: block; border-radius: 50%; }
+
+    .control-panel {
+        background: #080808;
+        padding: 10px 14px 18px;
+        border-top: 1px solid #1a1a1a;
+        flex-shrink: 0;
+    }
+
+    #status-text {
+        font-size: 8px;
+        letter-spacing: 3px;
+        color: var(--neon);
+        margin-bottom: 10px;
+        text-align: center;
+        text-transform: uppercase;
+        opacity: 0.8;
+        min-height: 13px;
+    }
+
+    .console-row {
+        display: grid;
+        grid-template-columns: 1fr 1.2fr 1fr;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+
+    .slider-bundle {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .slider-label {
+        font-size: 7px;
+        font-weight: 700;
+        letter-spacing: 1.5px;
+        color: var(--neon);
+        text-transform: uppercase;
+        text-align: center;
+        opacity: 0.85;
+    }
+
+    .vertical-track {
+        width: 90px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transform: rotate(-90deg);
+    }
+    .vertical-track input[type=range] {
+        width: 90px;
+        height: 18px;
+        accent-color: var(--neon);
+        cursor: pointer;
+        touch-action: none;
+    }
+
+    input[type=range].horizontal {
+        width: 100%;
+        height: 20px;
+        accent-color: var(--neon);
+        cursor: pointer;
+    }
+
+    #btn-bypass {
+        width: 100%;
+        height: 52px;
+        font-size: 8px;
+        font-weight: 800;
+        letter-spacing: 1px;
+        cursor: pointer;
+        border-radius: 6px;
+        line-height: 1.5;
+        transition: background 0.2s, box-shadow 0.2s;
+    }
+    #btn-bypass.active  { background: var(--neon); color: #000; border-color: var(--neon); box-shadow: 0 0 16px var(--neon); }
+    #btn-bypass.inactive{ background: var(--red);  color: #fff; border-color: var(--red);  box-shadow: 0 0 12px var(--red); }
+
+    .contour-row { margin-bottom: 12px; }
+
+    .progress-wrap {
+        display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+    }
+    .progress-wrap input[type=range] { flex:1; height:18px; accent-color:var(--neon); cursor:pointer; }
+    .time-label { font-size:8px; letter-spacing:1px; color:var(--neon); min-width:30px; text-align:right; opacity:.65; }
+
+    .transport-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin-bottom:7px; }
+    .action-grid    { display:grid; grid-template-columns:1fr 1fr; gap:5px; }
+
+    button, .file-label {
+        background: transparent;
+        color: var(--neon);
+        border: 1.5px solid rgba(0,255,204,0.45);
+        padding: 11px 4px;
+        cursor: pointer;
+        font-weight: 700;
+        border-radius: 6px;
+        font-size: 9px;
+        text-transform: uppercase;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        user-select: none;
+        -webkit-user-select: none;
+        transition: opacity 0.1s, transform 0.1s;
+        letter-spacing: 0.5px;
+    }
+    button:active, .file-label:active { transform: scale(0.92); opacity: 0.6; }
+
+    .recording {
+        background: var(--red) !important;
+        color: #fff !important;
+        border-color: var(--red) !important;
+        animation: blink 0.9s ease-in-out infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.38} }
+</style>
+```
+
+</head>
+<body>
+<div class="app-container">
+    <div class="top-header"><h1>DEPTH<span>IMPACT</span> HYBRID</h1></div>
+
+```
+<div class="main-interface">
+    <div class="sphere-label">IMMERSION SPHERE</div>
+    <div class="globe-wrapper" id="globe-wrapper">
+        <div class="globe-ring-outer"></div>
+        <div class="globe-ring-inner"></div>
+        <canvas id="vc"></canvas>
+    </div>
+</div>
+
+<div class="control-panel">
+    <div id="status-text">LOAD A FILE · PRESS PLAY</div>
+
+    <div class="progress-wrap">
+        <input type="range" id="seek-bar" min="0" max="1000" value="0" step="1">
+        <span class="time-label" id="time-display">0:00</span>
+    </div>
+
+    <div class="console-row">
+        <div class="slider-bundle">
+            <div class="vertical-track">
+                <input type="range" id="clarity" min="0" max="100" value="0">
+            </div>
+            <span class="slider-label">CLARITY</span>
+        </div>
+        <div class="slider-bundle">
+            <button id="btn-bypass" class="active">PROCESS<br>ON</button>
+            <span class="slider-label">BYPASS</span>
+        </div>
+        <div class="slider-bundle">
+            <div class="vertical-track">
+                <input type="range" id="depth" min="0" max="100" value="0">
+            </div>
+            <span class="slider-label">DEPTH</span>
+        </div>
+    </div>
+
+    <div class="slider-bundle contour-row">
+        <span class="slider-label">LO CONTOUR</span>
+        <input type="range" class="horizontal" id="contour" min="0" max="100" value="0">
+    </div>
+
+    <div class="transport-grid">
+        <button id="btn-rw">« RW</button>
+        <button id="btn-play">▶ PLAY</button>
+        <button id="btn-stop">■ STOP</button>
+        <button id="btn-ff">FF »</button>
+    </div>
+
+    <div class="action-grid">
+        <label for="audio-upload" class="file-label">⊕ LOAD AUDIO</label>
+        <input type="file" id="audio-upload"
+            accept="audio/*,audio/mpeg,audio/mp4,audio/aac,audio/ogg,audio/wav,audio/flac,audio/x-m4a,.mp3,.m4a,.wav,.flac,.ogg,.aac"
+            style="display:none">
+        <button id="btn-rec">● REC MP3</button>
+    </div>
+</div>
+```
+
+</div>
+
+<audio id="audio-el" preload="auto"></audio>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js"></script>
+
+<script>
+"use strict";
+
+// ── Canvas ────────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('vc');
+const SIZE   = Math.min(Math.round(window.innerWidth * 0.74), 246);
+canvas.width = SIZE; canvas.height = SIZE;
+canvas.style.width = SIZE+'px'; canvas.style.height = SIZE+'px';
+const ctx = canvas.getContext('2d');
+const CX = SIZE/2, CY = SIZE/2, R = SIZE * 0.455;
+
+// ── Audio state ───────────────────────────────────────────────────────────────
+let audioCtx=null, analyser=null, sourceNode=null;
+let loFilter, hiFilter, delayNode, delayGain, dryGain, masterGain;
+let scriptProc=null, lameMp3Enc=null, mp3Chunks=[];
+let isProcessing=true, isRecording=false, audioReady=false;
+let fileObjectURL=null;
+
+const audioEl   = document.getElementById('audio-el');
+const bypassBtn = document.getElementById('btn-bypass');
+const statusEl  = document.getElementById('status-text');
+const seekBar   = document.getElementById('seek-bar');
+const timeLbl   = document.getElementById('time-display');
+
+// ── Geodesic sphere ───────────────────────────────────────────────────────────
+// 3 bands driven by separate freq zones:
+//   lo  → contour (bass)  bins 0–4
+//   mid → depth (spatial) bins 5–18
+//   hi  → clarity(treble) bins 19–55
+const LAT_DIVS=10, LON_DIVS=20;
+const NODES=[], EDGES=[];
+
+for (let li=0; li<=LAT_DIVS; li++) {
+    const frac = li/LAT_DIVS;
+    const lat  = -Math.PI/2 + Math.PI*frac;
+    const type = frac<0.33?'lo': frac>0.66?'hi':'mid';
+    const fi   = type==='lo'  ? Math.floor(Math.random()*5)
+               : type==='hi'  ? 19+Math.floor(Math.random()*37)
+               :                 5+Math.floor(Math.random()*14);
+    const cnt  = Math.max(1, Math.round(LON_DIVS*Math.cos(lat)));
+    for (let lj=0; lj<cnt; lj++) {
+        const lon = 2*Math.PI*lj/cnt + (li%2?0.18:0);
+        NODES.push({lat, lon, type, fi});
+    }
+}
+
+// Edges: connect angularly nearby nodes for geodesic mesh
+for (let a=0; a<NODES.length; a++) {
+    for (let b=a+1; b<NODES.length; b++) {
+        const na=NODES[a], nb=NODES[b];
+        const dlat=na.lat-nb.lat;
+        let dlon=Math.abs(na.lon-nb.lon); if(dlon>Math.PI) dlon=2*Math.PI-dlon;
+        const midLat=(na.lat+nb.lat)/2;
+        const d=Math.sqrt(dlat*dlat + (dlon*Math.cos(midLat))**2);
+        if (d<0.40) EDGES.push([a,b]);
+    }
+}
+
+// Background stars inside sphere
+const STARS=Array.from({length:60},()=>({
+    x:Math.random()*SIZE, y:Math.random()*SIZE,
+    r:0.1+Math.random()*0.35, op:0.03+Math.random()*0.1, dy:0.012+Math.random()*0.025
+}));
+
+// ── 3D projection ─────────────────────────────────────────────────────────────
+function proj(lat, lon, rotY) {
+    const cl=Math.cos(lat), sl=Math.sin(lat);
+    const co=Math.cos(lon+rotY), so=Math.sin(lon+rotY);
+    return { x: CX+cl*so*R, y: CY-sl*R, z: cl*co };
+}
+
+// ── Audio graph ───────────────────────────────────────────────────────────────
+function buildAudioGraph() {
+    if (audioReady) return true;
+    try {
+        audioCtx   = new (window.AudioContext||window.webkitAudioContext)({sampleRate:44100});
+        analyser   = audioCtx.createAnalyser();
+        analyser.fftSize = 128;
+        analyser.smoothingTimeConstant = 0.78;
+        sourceNode = audioCtx.createMediaElementSource(audioEl);
+
+        loFilter   = audioCtx.createBiquadFilter();
+        loFilter.type='lowshelf'; loFilter.frequency.value=150; loFilter.gain.value=0;
+        hiFilter   = audioCtx.createBiquadFilter();
+        hiFilter.type='highshelf'; hiFilter.frequency.value=3000; hiFilter.gain.value=0;
+        delayNode  = audioCtx.createDelay(1.0); delayNode.delayTime.value=0.06;
+        delayGain  = audioCtx.createGain(); delayGain.gain.value=0;
+        dryGain    = audioCtx.createGain(); dryGain.gain.value=1;
+        masterGain = audioCtx.createGain(); masterGain.gain.value=1;
+
+        sourceNode.connect(loFilter);
+        loFilter.connect(hiFilter);
+        hiFilter.connect(dryGain);   dryGain.connect(masterGain);
+        hiFilter.connect(delayNode); delayNode.connect(delayGain); delayGain.connect(masterGain);
+        masterGain.connect(analyser);
+        analyser.connect(audioCtx.destination);
+
+        // ScriptProcessor for PCM capture → lamejs MP3
+        try {
+            scriptProc = audioCtx.createScriptProcessor(4096, 2, 2);
+            masterGain.connect(scriptProc);
+            scriptProc.connect(audioCtx.destination);
+            scriptProc.onaudioprocess = function(e) {
+                if (!isRecording || !lameMp3Enc) return;
+                const L = floatTo16(e.inputBuffer.getChannelData(0));
+                const Ri= floatTo16(e.inputBuffer.getChannelData(1));
+                const buf = lameMp3Enc.encodeBuffer(L, Ri);
+                if (buf.length>0) mp3Chunks.push(new Int8Array(buf));
+            };
+        } catch(e){ console.warn('ScriptProcessor N/A',e); }
+
+        audioReady=true; return true;
+    } catch(e){ console.error('AudioCtx failed',e); setStatus('AUDIO ENGINE ERROR'); return false; }
+}
+
+function floatTo16(buf){
+    const out=new Int16Array(buf.length);
+    for(let i=0;i<buf.length;i++){const s=Math.max(-1,Math.min(1,buf[i]));out[i]=s<0?s*0x8000:s*0x7FFF;}
+    return out;
+}
+
+function resumeCtx(){ if(audioCtx&&audioCtx.state==='suspended') audioCtx.resume(); }
+
+// ── File ──────────────────────────────────────────────────────────────────────
+document.getElementById('audio-upload').addEventListener('change', function(e){
+    const f=e.target.files[0]; if(!f) return;
+    if(fileObjectURL) URL.revokeObjectURL(fileObjectURL);
+    fileObjectURL=URL.createObjectURL(f);
+    audioEl.src=fileObjectURL; audioEl.load();
+    const nm=f.name.length>24?f.name.slice(0,21)+'…':f.name;
+    setStatus('LOADED: '+nm.toUpperCase());
+    seekBar.value=0; timeLbl.textContent='0:00'; this.value='';
+});
+
+// ── Transport ─────────────────────────────────────────────────────────────────
+document.getElementById('btn-play').addEventListener('click',function(){
+    if(!audioEl.src||audioEl.src===window.location.href){setStatus('LOAD A FILE FIRST');return;}
+    if(!audioReady&&!buildAudioGraph()) return;
+    resumeCtx();
+    audioEl.play()
+        .then(()=>setStatus(isProcessing?'PROCESSING':'BYPASSED'))
+        .catch(err=>{console.error('play() rejected:',err);setStatus('PLAYBACK BLOCKED');});
+});
+document.getElementById('btn-stop').addEventListener('click',()=>{audioEl.pause();audioEl.currentTime=0;setStatus('STOPPED');});
+document.getElementById('btn-rw').addEventListener('click',()=>{if(audioEl.readyState)audioEl.currentTime=Math.max(0,audioEl.currentTime-5);});
+document.getElementById('btn-ff').addEventListener('click',()=>{if(audioEl.readyState)audioEl.currentTime=Math.min(audioEl.duration||0,audioEl.currentTime+5);});
+
+// ── Seek ──────────────────────────────────────────────────────────────────────
+let seeking=false;
+seekBar.addEventListener('touchstart',()=>{seeking=true;},{passive:true});
+seekBar.addEventListener('mousedown', ()=>{seeking=true;});
+seekBar.addEventListener('input', ()=>{if(audioEl.duration)audioEl.currentTime=(seekBar.value/1000)*audioEl.duration;});
+seekBar.addEventListener('change',()=>{seeking=false;});
+audioEl.addEventListener('timeupdate',()=>{
+    if(!seeking&&audioEl.duration){seekBar.value=(audioEl.currentTime/audioEl.duration)*1000;timeLbl.textContent=fmt(audioEl.currentTime);}
+});
+audioEl.addEventListener('ended',()=>{setStatus('FINISHED');seekBar.value=0;});
+function fmt(s){return`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;}
+
+// ── Bypass ────────────────────────────────────────────────────────────────────
+bypassBtn.addEventListener('click',()=>{
+    isProcessing=!isProcessing;
+    if(audioReady){
+        loFilter.gain.value =isProcessing?(document.getElementById('contour').value/100)*25:0;
+        hiFilter.gain.value =isProcessing?(document.getElementById('clarity').value/100)*25:0;
+        if(!isProcessing) delayGain.gain.value=0;
+    }
+    bypassBtn.innerHTML=isProcessing?'PROCESS<br>ON':'PROCESS<br>OFF';
+    bypassBtn.className=isProcessing?'active':'inactive';
+    setStatus(isProcessing?'PROCESSING':'BYPASSED');
+});
+
+// ── Sliders ───────────────────────────────────────────────────────────────────
+document.getElementById('clarity').addEventListener('input',function(){if(hiFilter&&isProcessing)hiFilter.gain.value=(this.value/100)*25;});
+document.getElementById('depth').addEventListener('input',function(){if(delayGain&&isProcessing)delayGain.gain.value=(this.value/100)*0.8;});
+document.getElementById('contour').addEventListener('input',function(){if(loFilter&&isProcessing)loFilter.gain.value=(this.value/100)*25;});
+
+// ── MP3 Recording ─────────────────────────────────────────────────────────────
+const recBtn=document.getElementById('btn-rec');
+recBtn.addEventListener('click',function(){
+    if(!audioReady){setStatus('PRESS PLAY FIRST');return;}
+    if(!isRecording){
+        if(typeof lamejs==='undefined'){setStatus('MP3 LIB LOADING…');return;}
+        lameMp3Enc=new lamejs.Mp3Encoder(2,audioCtx.sampleRate,128);
+        mp3Chunks=[];
+        isRecording=true;
+        this.textContent='■ STOP REC';
+        this.classList.add('recording');
+        setStatus('RECORDING MP3…');
+    } else {
+        isRecording=false;
+        this.textContent='● REC MP3';
+        this.classList.remove('recording');
+        if(lameMp3Enc){const fl=lameMp3Enc.flush();if(fl.length>0)mp3Chunks.push(new Int8Array(fl));}
+        saveMp3();
+    }
+});
+
+function saveMp3(){
+    if(!mp3Chunks.length){setStatus('NOTHING RECORDED');return;}
+    const blob=new Blob(mp3Chunks,{type:'audio/mp3'});
+    const url=URL.createObjectURL(blob);
+    const a=Object.assign(document.createElement('a'),{href:url,download:'ImpactMix.mp3'});
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),8000);
+    setStatus('MP3 SAVED ✓');
+}
+
+function setStatus(msg){statusEl.textContent=msg;}
+
+// ── Draw loop ─────────────────────────────────────────────────────────────────
+function draw(){
+    requestAnimationFrame(draw);
+
+    const bins=analyser?analyser.frequencyBinCount:64;
+    const freq=new Uint8Array(bins);
+    if(analyser) analyser.getByteFrequencyData(freq);
+
+    const clarityVal = document.getElementById('clarity').value/100;
+    const depthVal   = document.getElementById('depth').value/100;
+    const contourVal = document.getElementById('contour').value/100;
+
+    ctx.clearRect(0,0,SIZE,SIZE);
+
+    // Sphere background
+    const bg=ctx.createRadialGradient(CX,CY*0.85,0,CX,CY,R*1.05);
+    bg.addColorStop(0,  'rgba(4,28,22,1)');
+    bg.addColorStop(0.5,'rgba(2,14,12,1)');
+    bg.addColorStop(1,  'rgba(0,4,8,1)');
+    ctx.beginPath(); ctx.arc(CX,CY,R,0,Math.PI*2);
+    ctx.fillStyle=bg; ctx.fill();
+
+    // Clip to sphere
+    ctx.save();
+    ctx.beginPath(); ctx.arc(CX,CY,R-0.5,0,Math.PI*2); ctx.clip();
+
+    // Drifting background stars
+    STARS.forEach(s=>{
+        ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+        ctx.fillStyle=`rgba(160,255,230,${s.op})`; ctx.fill();
+        s.y+=s.dy; if(s.y>SIZE){s.y=0;s.x=Math.random()*SIZE;}
+    });
+
+    const rotY=(Date.now()/1000)*0.16;
+    const P=NODES.map(n=>proj(n.lat,n.lon,rotY));
+
+    // ── Edges ──
+    EDGES.forEach(([a,b])=>{
+        const pa=P[a],pb=P[b];
+        if(pa.z<-0.05&&pb.z<-0.05) return;
+        const na=NODES[a],nb=NODES[b];
+        const va=freq[Math.min(na.fi,bins-1)]/255;
+        const vb=freq[Math.min(nb.fi,bins-1)]/255;
+        const e=(va+vb)/2;
+        const vis=Math.max(0,(pa.z+pb.z)/2+0.25);
+        // Per-band edge color
+        const type=na.type;
+        // lo=warm teal, mid=cyan, hi=cool white-cyan
+        const [r,g,b2]= type==='lo'?[0,200,155]: type==='hi'?[160,245,255]:[0,255,215];
+        const alpha=Math.min(0.6, 0.06+e*0.4+vis*0.08);
+        ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y);
+        ctx.strokeStyle=`rgba(${r},${g},${b2},${alpha})`;
+        ctx.lineWidth=0.45+e*0.9;
+        ctx.stroke();
+    });
+
+    // ── Nodes ──
+    NODES.forEach((n,i)=>{
+        const p=P[i];
+        if(p.z<-0.12) return;
+
+        const rawV = freq[Math.min(n.fi,bins-1)]/255;
+        // Slider boosts per zone — lo=contour, mid=depth, hi=clarity
+        const boost = n.type==='lo' ? contourVal*0.55
+                    : n.type==='hi' ? clarityVal*0.55
+                    :                  depthVal*0.35;
+        const energy=Math.min(1, rawV+boost);
+        const vis=Math.max(0, p.z+0.18);
+        const dotR=Math.max(0.3,(0.8+energy*3.8)*vis);
+
+        // Zone colors
+        // lo  = deep teal-green (bass warmth)
+        // mid = pure neon cyan (spatial)
+        // hi  = cold white-blue-cyan (air/treble)
+        const [cr,cg,cb]= n.type==='lo'?[0,210,140]: n.type==='hi'?[170,240,255]:[0,255,210];
+
+        // Glow halo
+        if(energy>0.06){
+            const glow=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,dotR*5);
+            glow.addColorStop(0,  `rgba(${cr},${cg},${cb},${energy*0.55*vis})`);
+            glow.addColorStop(0.4,`rgba(${cr},${cg},${cb},${energy*0.12*vis})`);
+            glow.addColorStop(1,  'rgba(0,0,0,0)');
+            ctx.beginPath(); ctx.arc(p.x,p.y,dotR*5,0,Math.PI*2);
+            ctx.fillStyle=glow; ctx.fill();
+        }
+
+        // Core: blend to white at high energy
+        const wm=energy*0.85;
+        const rr=Math.round(cr+(255-cr)*wm);
+        const gg=Math.round(cg+(255-cg)*wm*0.4);
+        const bb=Math.round(cb+(255-cb)*wm*0.25);
+        ctx.beginPath(); ctx.arc(p.x,p.y,dotR,0,Math.PI*2);
+        ctx.fillStyle=`rgba(${rr},${gg},${bb},${Math.min(1,0.45+energy*0.75)*vis})`;
+        ctx.fill();
+    });
+
+    ctx.restore(); // end sphere clip
+
+    // Specular highlight (top-left, like reference image)
+    const spec=ctx.createRadialGradient(CX-R*0.38,CY-R*0.38,0,CX,CY,R);
+    spec.addColorStop(0,'rgba(0,255,200,0.08)');
+    spec.addColorStop(0.55,'rgba(0,255,200,0.01)');
+    spec.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.beginPath(); ctx.arc(CX,CY,R,0,Math.PI*2);
+    ctx.fillStyle=spec; ctx.fill();
+
+    // Rim glow
+    ctx.beginPath(); ctx.arc(CX,CY,R,0,Math.PI*2);
+    ctx.strokeStyle='rgba(0,255,204,0.32)';
+    ctx.lineWidth=1.8;
+    ctx.stroke();
+}
+
+draw();
+</script>
+
+</body>
+</html>
